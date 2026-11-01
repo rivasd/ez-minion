@@ -1,4 +1,5 @@
-﻿import { Button, Center, Group, Paper, PinInput, Stack, Text, TextInput, Title } from '@mantine/core';
+﻿import { Button, Center, Group, PinInput, Stack, Text, TextInput, Title } from '@mantine/core';
+import { IconVolume, IconVolumeOff } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
 import { ANSWERS, AUDIO_URL, FINAL_CODE, UNLOCK_CODE, normalize } from '../game/codeConfig';
 
@@ -9,6 +10,7 @@ export function CodePanel() {
   const [values, setValues] = useState<string[]>(ANSWERS.map(() => ''));
   const [solved, setSolved] = useState<boolean[]>(ANSWERS.map(() => false));
   const [wrong, setWrong] = useState<number | null>(null);
+  const [playing, setPlaying] = useState(false);
   const audio = useRef<HTMLAudioElement | null>(null);
 
   useEffect(
@@ -23,7 +25,10 @@ export function CodePanel() {
       const a = new Audio(AUDIO_URL);
       a.loop = true;
       audio.current = a;
-      a.play().catch((err) => console.warn('Audio could not play:', err));
+      a.play().then(
+        () => setPlaying(true),
+        (err) => console.warn('Audio could not play:', err),
+      );
       setUnlocked(true);
     } else {
       setPinError(true);
@@ -45,9 +50,19 @@ export function CodePanel() {
 
   const allSolved = solved.every(Boolean);
 
+  useEffect(() => {
+    if (!allSolved || !audio.current) return;
+    audio.current.pause();
+    audio.current.currentTime = 0;
+    setPlaying(false);
+  }, [allSolved]);
+
   return (
-    <Paper h="100%" p="xl" radius={0} bg="dark.7">
-      <Center h="100%">
+    <Stack h="100%" p="xl" align="center">
+      <Title order={1} c="dark.9" style={{ letterSpacing: '0.25em' }}>
+        BELLO PODCAST
+      </Title>
+      <Center flex={1} w="100%">
         {!unlocked ? (
           <PinInput
             length={3}
@@ -65,11 +80,19 @@ export function CodePanel() {
           />
         ) : (
           <Stack w="100%" gap="md">
+            <Center>
+              {playing ? (
+                <IconVolume size={48} color="var(--mantine-color-dark-9)" />
+              ) : (
+                <IconVolumeOff size={48} color="var(--mantine-color-dark-9)" />
+              )}
+            </Center>
             {ANSWERS.map((_, i) => (
               <Group key={i} wrap="nowrap" align="flex-end">
                 <TextInput
                   flex={1}
-                  label={`${i + 1}`}
+                  label={i + 1}
+                  styles={{ label: { color: 'var(--mantine-color-dark-9)', fontWeight: 700 } }}
                   value={values[i]}
                   disabled={solved[i]}
                   error={wrong === i}
@@ -92,10 +115,10 @@ export function CodePanel() {
             ))}
             {allSolved && (
               <Stack align="center" gap={0} mt="md">
-                <Text c="dimmed" size="sm">
+                <Text c="dark.9" size="sm">
                   Code final
                 </Text>
-                <Title order={1} style={{ letterSpacing: '0.4em' }}>
+                <Title order={1} c="dark.9" style={{ letterSpacing: '0.4em' }}>
                   {FINAL_CODE}
                 </Title>
               </Stack>
@@ -103,6 +126,8 @@ export function CodePanel() {
           </Stack>
         )}
       </Center>
-    </Paper>
+    </Stack>
   );
 }
+
+

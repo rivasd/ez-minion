@@ -3,8 +3,14 @@
 export const TOLERANCE_MS = 100;
 export const STREAK_TO_SOLVE = 10;
 export const FLASH_MS = 250;
-export const SECRET_PHRASE = 'REPLACE ME WITH THE REAL PHRASE';
+export const SECRET_PHRASE = import.meta.env.VITE_TEMPO_PHRASE ?? '';
 
 /** Secret chord: hold all of these keys at once (KeyboardEvent.code) to enter setup mode. */
 export const SECRET_HOTKEY = ['KeyE', 'KeyS', 'KeyC'];
 
+
+
+/** Setup mode: number of taps averaged to find the pulse phase. */
+export const SETUP_TAPS = 3;
+/** A pause longer than this between setup taps restarts the count. */
+export const SETUP_MAX_GAP_MS = 2500;

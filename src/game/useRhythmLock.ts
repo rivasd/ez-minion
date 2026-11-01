@@ -3,6 +3,8 @@ import {
   FLASH_MS,
   PULSE_INTERVAL_MS,
   SECRET_HOTKEY,
+  SETUP_MAX_GAP_MS,
+  SETUP_TAPS,
   STREAK_TO_SOLVE,
   TOLERANCE_MS,
 } from './config';
@@ -18,6 +20,8 @@ export function useRhythmLock(toleranceMs = TOLERANCE_MS) {
   const lastTick = useRef(0);
   const intervalId = useRef<number | undefined>(undefined);
   const flashTimer = useRef<number | undefined>(undefined);
+  const startTimer = useRef<number | undefined>(undefined);
+  const setupTaps = useRef<number[]>([]);
   const modeRef = useRef(mode);
   modeRef.current = mode;
 
@@ -46,6 +50,7 @@ export function useRhythmLock(toleranceMs = TOLERANCE_MS) {
   useEffect(
     () => () => {
       window.clearInterval(intervalId.current);
+      window.clearTimeout(startTimer.current);
       window.clearTimeout(flashTimer.current);
     },
     [],
@@ -54,15 +59,32 @@ export function useRhythmLock(toleranceMs = TOLERANCE_MS) {
   const press = useCallback(() => {
     const now = performance.now();
     switch (modeRef.current) {
-      case 'setup':
-        // The press itself is beat zero; the hidden pulse starts here.
-        lastTick.current = now;
-        intervalId.current = window.setInterval(() => {
+      case 'setup': {
+        // Tap along on the intended beat. A long pause means a fresh attempt.
+        const taps = setupTaps.current;
+        if (taps.length && now - taps[taps.length - 1] > SETUP_MAX_GAP_MS) taps.length = 0;
+        taps.push(now);
+        if (taps.length < SETUP_TAPS) break;
+
+        // Taps are consecutive seconds of the clock: tap k lands on beat k, so each
+        // one votes for a start time of (t_k - k * 1s). Average the votes.
+        const P = PULSE_INTERVAL_MS;
+        const phase = taps.reduce((sum, t, k) => sum + (t - k * P), 0) / taps.length;
+        taps.length = 0;
+
+        const beatsElapsed = Math.floor((now - phase) / P);
+        lastTick.current = phase + beatsElapsed * P;
+        const nextBeat = lastTick.current + P;
+        startTimer.current = window.setTimeout(() => {
           lastTick.current = performance.now();
-        }, PULSE_INTERVAL_MS);
+          intervalId.current = window.setInterval(() => {
+            lastTick.current = performance.now();
+          }, P);
+        }, nextBeat - performance.now());
         setStreak(0);
         setMode('game');
         break;
+      }
       case 'game': {
         const sinceTick = now - lastTick.current;
         const offBeat = Math.min(sinceTick, PULSE_INTERVAL_MS - sinceTick);
@@ -74,6 +96,7 @@ export function useRhythmLock(toleranceMs = TOLERANCE_MS) {
             const next = s + 1;
             if (next >= STREAK_TO_SOLVE) {
               window.clearInterval(intervalId.current);
+              window.clearTimeout(startTimer.current);
               setMode('solved');
             }
             return next;

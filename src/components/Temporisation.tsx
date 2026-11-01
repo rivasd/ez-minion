@@ -1,22 +1,16 @@
 ﻿import { Center, Stack, Title } from '@mantine/core';
+import { useEffect } from 'react';
 import { SECRET_PHRASE } from '../game/config';
 import { useRhythmLock } from '../game/useRhythmLock';
+import type { Mode } from '../game/useRhythmLock';
 import { BigRedButton } from './BigRedButton';
 
-const MINION_YELLOW = '#FFD90F';
-const SETUP_GREEN = '#2fb344';
-
-export function Temporisation() {
+export function Temporisation({ onModeChange }: { onModeChange: (mode: Mode) => void }) {
   const { mode, flash, press } = useRhythmLock();
+  useEffect(() => onModeChange(mode), [mode, onModeChange]);
 
   return (
-    <Center
-      h="100%"
-      style={{
-        background: mode === 'setup' ? SETUP_GREEN : MINION_YELLOW,
-        transition: 'background 300ms',
-      }}
-    >
+    <Center h="100%">
       <Stack align="center" gap="xl">
         <Title order={1} c="dark.9" style={{ letterSpacing: '0.25em' }}>
           TEMPORISATION
@@ -30,4 +24,5 @@ export function Temporisation() {
     </Center>
   );
 }
+
 
