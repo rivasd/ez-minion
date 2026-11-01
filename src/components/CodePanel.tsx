@@ -1,4 +1,4 @@
-﻿import { Button, Center, Group, PinInput, Stack, Text, TextInput, Title } from '@mantine/core';
+﻿import { Button, Center, Group, Image, PinInput, Stack, Text, TextInput, Title } from '@mantine/core';
 import { IconVolume, IconVolumeOff } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
 import { ANSWERS, AUDIO_URL, FINAL_CODE, UNLOCK_CODE, normalize } from '../game/codeConfig';
@@ -62,6 +62,7 @@ export function CodePanel() {
       <Title order={1} c="dark.9" style={{ letterSpacing: '0.25em' }}>
         BELLO PODCAST
       </Title>
+      <Image src={`${import.meta.env.BASE_URL}images/banana.svg`} alt="" h={72} w="auto" fit="contain" />
       <Center flex={1} w="100%">
         {!unlocked ? (
           <PinInput
