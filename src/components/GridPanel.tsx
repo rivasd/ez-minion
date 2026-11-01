@@ -1,14 +1,14 @@
 ﻿import { Box, Group, Stack, Text } from '@mantine/core';
 import { useRef, useState } from 'react';
+import { BOARD_DIGITS } from '../game/config';
 
 const SIZE = 8;
 const LINE = 'rgba(0, 0, 0, 0.35)';
-const DIGITS = Array.from({ length: SIZE * SIZE }, () => Math.floor(Math.random() * 10));
 const PATHS = ['le chemin de la pomme', 'le chemin de la banane', 'le chemin du raisin'];
 
 export function GridPanel() {
-  // Placeholder digits: random for now, fixed for the lifetime of the page.
-  const [digits] = useState(DIGITS);
+  // Row-major, top-left first, flattened from BOARD_DIGITS in config.
+  const digits = BOARD_DIGITS.flat();
   const [held, setHeld] = useState<number | null>(null);
   const [cell, setCell] = useState({ row: 0, col: 0 });
   // While dragging: pointer position as a 0..1 fraction of the grid.
@@ -65,7 +65,7 @@ export function GridPanel() {
                 cursor: 'pointer',
               }}
             >
-              {held === i ? d : ''}
+              {held === i ? (d ?? '') : ''}
             </Box>
           ))}
           <Box

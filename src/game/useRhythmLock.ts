@@ -17,10 +17,8 @@ export function useRhythmLock(toleranceMs = TOLERANCE_MS) {
   const [streak, setStreak] = useState(0);
   const [flash, setFlash] = useState<Flash>('none');
 
-  const lastTick = useRef(0);
-  const intervalId = useRef<number | undefined>(undefined);
+  const beatAnchor = useRef(0);
   const flashTimer = useRef<number | undefined>(undefined);
-  const startTimer = useRef<number | undefined>(undefined);
   const setupTaps = useRef<number[]>([]);
   const modeRef = useRef(mode);
   modeRef.current = mode;
@@ -48,11 +46,7 @@ export function useRhythmLock(toleranceMs = TOLERANCE_MS) {
   }, []);
 
   useEffect(
-    () => () => {
-      window.clearInterval(intervalId.current);
-      window.clearTimeout(startTimer.current);
-      window.clearTimeout(flashTimer.current);
-    },
+    () => () => window.clearTimeout(flashTimer.current),
     [],
   );
 
@@ -72,22 +66,16 @@ export function useRhythmLock(toleranceMs = TOLERANCE_MS) {
         const phase = taps.reduce((sum, t, k) => sum + (t - k * P), 0) / taps.length;
         taps.length = 0;
 
-        const beatsElapsed = Math.floor((now - phase) / P);
-        lastTick.current = phase + beatsElapsed * P;
-        const nextBeat = lastTick.current + P;
-        startTimer.current = window.setTimeout(() => {
-          lastTick.current = performance.now();
-          intervalId.current = window.setInterval(() => {
-            lastTick.current = performance.now();
-          }, P);
-        }, nextBeat - performance.now());
+        beatAnchor.current = phase;
         setStreak(0);
         setMode('game');
         break;
       }
       case 'game': {
-        const sinceTick = now - lastTick.current;
-        const offBeat = Math.min(sinceTick, PULSE_INTERVAL_MS - sinceTick);
+        // Beats are phase + k * 1s on the monotonic clock. Computing them, rather than
+        // timestamping setInterval callbacks, means timer lateness can never accumulate.
+        const sinceBeat = (((now - beatAnchor.current) % PULSE_INTERVAL_MS) + PULSE_INTERVAL_MS) % PULSE_INTERVAL_MS;
+        const offBeat = Math.min(sinceBeat, PULSE_INTERVAL_MS - sinceBeat);
         if (offBeat <= toleranceMs) {
           window.clearTimeout(flashTimer.current);
           setFlash('green');
@@ -95,8 +83,6 @@ export function useRhythmLock(toleranceMs = TOLERANCE_MS) {
           setStreak((s) => {
             const next = s + 1;
             if (next >= STREAK_TO_SOLVE) {
-              window.clearInterval(intervalId.current);
-              window.clearTimeout(startTimer.current);
               setMode('solved');
             }
             return next;
