@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Red filter message generator</title>
+<style>
+  body { margin: 0; padding: 16px; font-family: system-ui, sans-serif; background: #1a1b1e; color: #e9ecef; }
+  main { max-width: 1000px; margin: 0 auto; display: grid; gap: 12px; }
+  textarea { width: 100%; box-sizing: border-box; font: 600 16px system-ui; padding: 8px; background: #25262b; color: inherit; border: 1px solid #373a40; border-radius: 6px; }
+  .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  button { padding: 8px 14px; border-radius: 6px; border: 0; background: #339af0; color: #fff; font-weight: 600; cursor: pointer; }
+  canvas { width: 960px; max-width: 100%; height: auto; border-radius: 6px; background: #000; image-rendering: pixelated; }
+  small { opacity: 0.7; }
+</style>
+</head>
+<body>
+<main>
+  <h1 style="margin:0">Red filter message generator</h1>
+  <textarea id="text" rows="3">Bravo
+vous avez trouvé</textarea>
+  <div class="row">
+    <label>Message strength <input id="strength" type="range" min="15" max="120" step="5" value="70" /></label>
+    <label>Red decoys <input id="redLetters" type="range" min="0" max="250" step="10" value="180" /></label>
+    <label>Yellow decoys <input id="yellowLetters" type="range" min="0" max="100" step="5" value="60" /></label>
+    <label>Blue decoys <input id="blueLetters" type="range" min="0" max="100" step="5" value="25" /></label>
+    <label>Red noise <input id="noise" type="range" min="0" max="100" step="5" value="45" /></label>
+    <label>Pixel size <input id="block" type="range" min="1" max="8" step="1" value="2" /></label>
+    <label><input id="filter" type="checkbox" /> Simulate red filter</label>
+    <button id="regen">Regenerate</button>
+    <button id="download">Download PNG</button>
+  </div>
+  <canvas id="c" width="960" height="540"></canvas>
+  <small>
+    The page is covered in decoy letters in the same tiny font as the message: red and yellow ones that a red lens cannot see, and bluish ones that a red lens turns into message-like strokes.
+    The message is set in a tiny 5x7 pixel font (one font dot = one pixel-size cell), a drop in red buried in random red pixel noise that is always a bit lighter than the message.
+    Lower "message strength" to hide it better from the naked eye. View on a bright screen at 100% zoom, with the
+    lens held against your eye.
+  </small>
+</main>
+<script>
+const W = 960, H = 540;
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const $ = (id) => document.getElementById(id);
+const rand = (a, b) => a + Math.random() * (b - a);
+const FONT = (s) => `900 ${s}px "Arial Black", Impact, sans-serif`;
+const BLUE_LEVEL = 0.75; // every blue decoy: one fixed red drop, close to the message's (1.0) so hue/saturation match
+const NOISE_MAX = 0.9; // overlaps of decoys/noise can get this dark, still below the message
+let rgb = null; // the real RGBA image
+
+// 5x7 bitmap font: 7 rows per glyph, '#' = dot.
+const FONT_ROWS = {
+  A: ['.###.', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
+  B: ['####.', '#...#', '#...#', '####.', '#...#', '#...#', '####.'],
+  C: ['.###.', '#...#', '#....', '#....', '#....', '#...#', '.###.'],
+  D: ['###..', '#..#.', '#...#', '#...#', '#...#', '#..#.', '###..'],
+  E: ['#####', '#....', '#....', '####.', '#....', '#....', '#####'],
+  F: ['#####', '#....', '#....', '####.', '#....', '#....', '#....'],
+  G: ['.###.', '#...#', '#....', '#.###', '#...#', '#...#', '.####'],
+  H: ['#...#', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
+  I: ['.###.', '..#..', '..#..', '..#..', '..#..', '..#..', '.###.'],
+  J: ['..###', '...#.', '...#.', '...#.', '...#.', '#..#.', '.##..'],
+  K: ['#...#', '#..#.', '#.#..', '##...', '#.#..', '#..#.', '#...#'],
+  L: ['#....', '#....', '#....', '#....', '#....', '#....', '#####'],
+  M: ['#...#', '##.##', '#.#.#', '#.#.#', '#...#', '#...#', '#...#'],
+  N: ['#...#', '##..#', '#.#.#', '#..##', '#...#', '#...#', '#...#'],
+  O: ['.###.', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
+  P: ['####.', '#...#', '#...#', '####.', '#....', '#....', '#....'],
+  Q: ['.###.', '#...#', '#...#', '#...#', '#.#.#', '#..#.', '.##.#'],
+  R: ['####.', '#...#', '#...#', '####.', '#.#..', '#..#.', '#...#'],
+  S: ['.####', '#....', '#....', '.###.', '....#', '....#', '####.'],
+  T: ['#####', '..#..', '..#..', '..#..', '..#..', '..#..', '..#..'],
+  U: ['#...#', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
+  V: ['#...#', '#...#', '#...#', '#...#', '#...#', '.#.#.', '..#..'],
+  W: ['#...#', '#...#', '#...#', '#.#.#', '#.#.#', '##.##', '#...#'],
+  X: ['#...#', '#...#', '.#.#.', '..#..', '.#.#.', '#...#', '#...#'],
+  Y: ['#...#', '#...#', '.#.#.', '..#..', '..#..', '..#..', '..#..'],
+  Z: ['#####', '....#', '...#.', '..#..', '.#...', '#....', '#####'],
+  0: ['.###.', '#...#', '#..##', '#.#.#', '##..#', '#...#', '.###.'],
+  1: ['..#..', '.##..', '..#..', '..#..', '..#..', '..#..', '.###.'],
+  2: ['.###.', '#...#', '....#', '...#.', '..#..', '.#...', '#####'],
+  3: ['####.', '....#', '....#', '.###.', '....#', '....#', '####.'],
+  4: ['...#.', '..##.', '.#.#.', '#..#.', '#####', '...#.', '...#.'],
+  5: ['#####', '#....', '####.', '....#', '....#', '#...#', '.###.'],
+  6: ['..##.', '.#...', '#....', '####.', '#...#', '#...#', '.###.'],
+  7: ['#####', '....#', '...#.', '..#..', '.#...', '.#...', '.#...'],
+  8: ['.###.', '#...#', '#...#', '.###.', '#...#', '#...#', '.###.'],
+  9: ['.###.', '#...#', '#...#', '.####', '....#', '...#.', '.##..'],
+  '!': ['..#..', '..#..', '..#..', '..#..', '..#..', '.....', '..#..'],
+  '.': ['.....', '.....', '.....', '.....', '.....', '.##..', '.##..'],
+  '?': ['.###.', '#...#', '....#', '...#.', '..#..', '.....', '..#..'],
+  '-': ['.....', '.....', '.....', '#####', '.....', '.....', '.....'],
+  "'": ['..#..', '..#..', '.#...', '.....', '.....', '.....', '.....'],
+  ',': ['.....', '.....', '.....', '.....', '.##..', '..#..', '.#...'],
+};
+const GLYPHS = Object.fromEntries(Object.entries(FONT_ROWS).map(([k, rows]) => [k, rows.join('')]));
+
+const GLYPH_KEYS = Object.keys(GLYPHS).filter((k) => /[A-Z0-9]/.test(k));
+const randGlyph = () => GLYPH_KEYS[Math.floor(Math.random() * GLYPH_KEYS.length)];
+const snap = (v, dot) => Math.round(v / dot) * dot;
+
+// Stamp one glyph, one font dot = a dot x dot square, calling put(pixelIndex) for each pixel.
+function stamp(ch, gx, gy, dot, put) {
+  const g = GLYPHS[ch];
+  if (!g) return;
+  for (let row = 0; row < 7; row++) {
+    for (let col = 0; col < 5; col++) {
+      if (g[row * 5 + col] !== '#') continue;
+      for (let y = gy + row * dot; y < gy + (row + 1) * dot; y++) {
+        for (let x = gx + col * dot; x < gx + (col + 1) * dot; x++) {
+          if (x >= 0 && x < W && y >= 0 && y < H) put(y * W + x);
+        }
+      }
+    }
+  }
+}
+
+// The message as a mask: plain horizontal lines of text, left-aligned.
+function makeMask(text, dot) {
+  const mask = new Uint8Array(W * H);
+  const lines = text
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .split('\n');
+  const charW = 6 * dot, lineH = 11 * dot;
+  const widest = Math.max(...lines.map((l) => l.length)) * charW;
+  const ox = snap(rand(0.08, Math.max(0.09, 0.9 - widest / W)) * W, dot);
+  const oy = snap(rand(0.15, Math.max(0.16, 0.85 - (lines.length * lineH) / H)) * H, dot);
+  lines.forEach((line, li) => {
+    [...line].forEach((ch, ci) => {
+      stamp(ch, ox + ci * charW, oy + li * lineH, dot, (i) => (mask[i] = 1));
+    });
+  });
+  return mask;
+}
+
+function generate() {
+  const dot = parseInt($('block').value, 10);
+  const strength = parseFloat($('strength').value);
+  const mask = makeMask($('text').value || ' ', dot);
+  // Decoys use the very same font and dot size as the message, scattered at random.
+  // 100% of a layer means about 1.3 letters per letter-sized cell of the canvas.
+  const perLayer = (id) =>
+    Math.round((parseInt($(id).value, 10) / 100) * 1.3 * (W * H) / (6 * dot * 8 * dot));
+  const randPos = () => [snap(rand(-5 * dot, W), dot), snap(rand(-7 * dot, H), dot)];
+
+  // "Blue" decoys: the same kind of red drop as the message, at a fixed level just under it,
+  // so alone they match its hue/saturation. Only where two overlap does the colour deepen.
+  const fake = new Float32Array(W * H);
+  for (let n = 0, count = perLayer('blueLetters'); n < count; n++) {
+    const [gx, gy] = randPos();
+    stamp(randGlyph(), gx, gy, dot, (i) => {
+      fake[i] = Math.min(NOISE_MAX, fake[i] + BLUE_LEVEL);
+    });
+  }
+
+  // Red and yellow decoys keep red at 255, so the red lens cannot see them at all.
+  rgb = new Uint8ClampedArray(W * H * 4);
+  for (let i = 0; i < W * H; i++) {
+    rgb[i * 4 + 1] = 232; rgb[i * 4 + 2] = 226; rgb[i * 4 + 3] = 255;
+  }
+  const nRed = perLayer('redLetters'), nYellow = perLayer('yellowLetters');
+  const kinds = [...Array(nRed).fill('r'), ...Array(nYellow).fill('y')];
+  kinds.sort(() => Math.random() - 0.5);
+  for (const kind of kinds) {
+    let g, b;
+    if (kind === 'r') { g = rand(15, 190); b = g * rand(0.55, 0.95); }
+    else { g = rand(185, 250); b = rand(0, 90); }
+    const [gx, gy] = randPos();
+    stamp(randGlyph(), gx, gy, dot, (i) => {
+      rgb[i * 4 + 1] = g; rgb[i * 4 + 2] = b;
+    });
+  }
+  // The message sits on top of any false letters, a touch darker still.
+  for (let i = 0; i < mask.length; i++) {
+    rgb[i * 4] = 255 - strength * (mask[i] ? 1 + 0.3 * fake[i] : fake[i]);
+  }
+  pixelate(dot, strength, parseInt($('noise').value, 10) / 100, mask);
+  draw();
+}
+// Replace every block x block cell by its average colour, so everything lands on one
+// crisp grid of dot-sized cells (decoys, noise and message are all aligned to it).
+// Then add random pixel noise: a share of the cells get a random extra drop in red.
+// Outside the message, decoy + noise never get darker than NOISE_MAX of the message,
+// so the message is always the darkest thing in the red channel.
+function pixelate(block, strength, noiseShare, mask) {
+  const cap = NOISE_MAX * strength;
+  for (let by = 0; by < H; by += block) {
+    for (let bx = 0; bx < W; bx += block) {
+      const x1 = Math.min(bx + block, W), y1 = Math.min(by + block, H);
+      let sr = 0, sg = 0, sb = 0, n = 0;
+      for (let y = by; y < y1; y++) {
+        for (let x = bx; x < x1; x++) {
+          const p = (y * W + x) * 4;
+          sr += rgb[p]; sg += rgb[p + 1]; sb += rgb[p + 2]; n++;
+        }
+      }
+      let drop = 255 - sr / n;
+      if (Math.random() < noiseShare) drop += rand(0.1, BLUE_LEVEL) * strength;
+      if (!mask[by * W + bx]) drop = Math.min(drop, cap);
+      const r = 255 - drop;
+      const g = sg / n + rand(-25, 25); // naked-eye grain only; the red lens blocks it
+      const b = sb / n + rand(-25, 25);
+      for (let y = by; y < y1; y++) {
+        for (let x = bx; x < x1; x++) {
+          const p = (y * W + x) * 4;
+          rgb[p] = r; rgb[p + 1] = g; rgb[p + 2] = b;
+        }
+      }
+    }
+  }
+}
+function draw() {
+  const img = new ImageData(new Uint8ClampedArray(rgb), W, H);
+  if ($('filter').checked) {
+    // A red lens passes red and leaks only a little of the rest.
+    for (let i = 0; i < img.data.length; i += 4) {
+      img.data[i + 1] *= 0.05; img.data[i + 2] *= 0.05;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+$('regen').onclick = generate;
+$('text').oninput = generate;
+$('strength').oninput = generate;
+for (const id of ['redLetters', 'yellowLetters', 'blueLetters']) $(id).oninput = generate;
+$('noise').oninput = generate;
+$('block').oninput = generate;
+$('filter').onchange = draw;
+$('download').onclick = () => {
+  // Always export the real image, not the filter simulation.
+  const prev = $('filter').checked;
+  $('filter').checked = false; draw();
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png'); a.download = 'red-filter-message.png'; a.click();
+  $('filter').checked = prev; draw();
+};
+if (new URLSearchParams(location.search).get('filter') === '1') $('filter').checked = true;
+generate();
+</script>
+</body>
+</html>
+
