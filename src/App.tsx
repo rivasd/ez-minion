@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { CodePanel } from './components/CodePanel';
 import { GridPanel } from './components/GridPanel';
-import { PhotoPanel } from './components/PhotoPanel';
+import { RedLightImage } from './components/RedLightImage';
 import { Section } from './components/Section';
 import { Temporisation } from './components/Temporisation';
 import type { Mode } from './game/useRhythmLock';
@@ -35,7 +35,7 @@ export function App() {
         <GridPanel />
       </Section>
       <Section>
-        <PhotoPanel />
+        <RedLightImage />
       </Section>
     </Box>
   );

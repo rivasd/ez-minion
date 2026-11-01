@@ -1,6 +1,7 @@
-﻿import { Box, Group, Stack, Text } from '@mantine/core';
+﻿import { ActionIcon, Box, Group, Stack, Text, Title } from '@mantine/core';
+import { IconCheck, IconQuestionMark } from '@tabler/icons-react';
 import { useRef, useState } from 'react';
-import { BOARD_DIGITS } from '../game/config';
+import { BOARD_DIGITS, PATH_POSITIONS } from '../game/config';
 
 const SIZE = 8;
 const LINE = 'rgba(0, 0, 0, 0.35)';
@@ -11,6 +12,7 @@ export function GridPanel() {
   const digits = BOARD_DIGITS.flat();
   const [held, setHeld] = useState<number | null>(null);
   const [cell, setCell] = useState({ row: 0, col: 0 });
+  const [pathDone, setPathDone] = useState<boolean[]>(PATHS.map(() => false));
   // While dragging: pointer position as a 0..1 fraction of the grid.
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -29,6 +31,9 @@ export function GridPanel() {
 
   return (
     <Stack h="100%" p="md" gap="sm" align="center" style={{ userSelect: 'none' }}>
+      <Title order={1} c="dark.9" ta="center" style={{ letterSpacing: '0.25em' }}>
+        Les chemins de cartes
+      </Title>
       <Box style={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', justifyContent: 'center' }}>
         <Box
           ref={gridRef}
@@ -107,30 +112,66 @@ export function GridPanel() {
               }}
             />
           </Box>
+          {/* Label for the start square, above the token; clicks pass through. */}
+          {held !== 0 && (
+            <Box
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                width: `${tokenSize}%`,
+                height: `${tokenSize}%`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 'clamp(8px, 1.5vh, 14px)',
+                fontWeight: 800,
+                color: 'var(--mantine-color-dark-9)',
+                pointerEvents: 'none',
+                zIndex: 2,
+              }}
+            >
+              Début
+            </Box>
+          )}
         </Box>
       </Box>
 
-      <Group gap="xs" wrap="nowrap">
-        {Array.from({ length: 5 }, (_, i) => (
-          <Box
-            key={i}
-            style={{
-              width: 'clamp(24px, 4.5vh, 44px)',
-              aspectRatio: '5 / 7',
-              border: `2px solid ${LINE}`,
-              borderRadius: 6,
-            }}
-          />
+      <Group justify="space-around" align="flex-start" wrap="nowrap" w="100%">
+        {PATHS.map((label, i) => (
+          <Stack key={label} align="center" gap={4} w="30%">
+            <ActionIcon
+              size={48}
+              radius="xl"
+              variant="filled"
+              color={pathDone[i] ? 'green' : 'blue'}
+              aria-disabled={pathDone[i]}
+              aria-label={label}
+              // Raised-button look: dark rim and a hard drop shadow; pressing sinks it.
+              style={{
+                border: '3px solid var(--mantine-color-dark-9)',
+                boxShadow: pathDone[i] ? 'none' : '0 5px 0 rgba(0, 0, 0, 0.45)',
+                transform: pathDone[i] ? 'translateY(5px)' : undefined,
+                cursor: pathDone[i] ? 'default' : 'pointer',
+              }}
+              onClick={() => {
+                if (pathDone[i]) return;
+                const target = PATH_POSITIONS[i];
+                if (target && target.row === cell.row && target.col === cell.col) {
+                  setPathDone((d) => d.map((v, j) => (j === i ? true : v)));
+                } else {
+                  setCell({ row: 0, col: 0 }); // wrong square: token goes back to the start
+                }
+              }}
+            >
+              {pathDone[i] ? <IconCheck size={26} /> : <IconQuestionMark size={26} />}
+            </ActionIcon>
+            <Text c="dark.9" fw={600} size="sm" ta="center">
+              {label}
+            </Text>
+          </Stack>
         ))}
       </Group>
-
-      <Stack gap={0} align="center">
-        {PATHS.map((p) => (
-          <Text key={p} c="dark.9" fw={600} size="sm">
-            {p}
-          </Text>
-        ))}
-      </Stack>
     </Stack>
   );
 }

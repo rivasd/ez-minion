@@ -235,7 +235,7 @@ $('download').onclick = () => {
   const prev = $('filter').checked;
   $('filter').checked = false; draw();
   const a = document.createElement('a');
-  a.href = canvas.toDataURL('image/png'); a.download = 'red-filter-message.png'; a.click();
+  a.href = canvas.toDataURL('image/png'); a.download = 'redlight.png'; a.click();
   $('filter').checked = prev; draw();
 };
 if (new URLSearchParams(location.search).get('filter') === '1') $('filter').checked = true;
